@@ -52,9 +52,6 @@ type Context struct {
 
 	// When the request was accepted.
 	ReceivedAt time.Time
-
-	// An upstream host to proxy requests to
-	DefaultUpstreamURL *url.URL
 }
 
 func (ctx *Context) onAccept(w http.ResponseWriter, r *http.Request) bool {
@@ -341,8 +338,8 @@ func (ctx *Context) doMitm() (w http.ResponseWriter, r *http.Request) {
 
 func (ctx *Context) doRequest(w http.ResponseWriter, r *http.Request) (bool, error) {
 	if !r.URL.IsAbs() {
-		if ctx.DefaultUpstreamURL != nil {
-			upstreamURL := *ctx.DefaultUpstreamURL
+		if ctx.Prx.DefaultUpstreamURL != nil {
+			upstreamURL := *ctx.Prx.DefaultUpstreamURL
 			upstreamURL.Path += r.URL.Path
 			upstreamURL.RawQuery = r.URL.RawQuery
 			r.URL = &upstreamURL

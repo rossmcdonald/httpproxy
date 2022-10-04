@@ -2,7 +2,9 @@ package httpproxy
 
 import (
 	"crypto/tls"
+	"fmt"
 	"net/http"
+	"net/url"
 	"sync/atomic"
 )
 
@@ -57,11 +59,26 @@ type Proxy struct {
 	AuthType string
 
 	signer *CaSigner
+
+	// An upstream host to proxy requests to
+	DefaultUpstreamURL *url.URL
 }
 
 // NewProxy returns a new Proxy has default CA certificate and key.
 func NewProxy() (*Proxy, error) {
 	return NewProxyCert(nil, nil)
+}
+
+func NewReverseProxy(upstreamURL string) (*Proxy, error) {
+	url, err := url.Parse(upstreamURL)
+	if err != nil {
+		return nil, NewError(fmt.Sprintf("Unable to parse upstream URL: %s", err))
+	}
+	prx, err := NewProxyCert(nil, nil)
+	if prx != nil {
+		prx.DefaultUpstreamURL = url
+	}
+	return prx, err
 }
 
 // NewProxyCert returns a new Proxy given CA certificate and key.
