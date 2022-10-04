@@ -5,11 +5,15 @@ import (
 	"context"
 	"crypto/tls"
 	"encoding/base64"
+	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
+	"time"
 )
 
 // Context keeps context of each proxy request.
@@ -45,9 +49,17 @@ type Context struct {
 
 	hijTLSConn   *tls.Conn
 	hijTLSReader *bufio.Reader
+
+	// When the request was accepted.
+	ReceivedAt time.Time
+
+	// An upstream host to proxy requests to
+	DefaultUpstreamURL *url.URL
 }
 
 func (ctx *Context) onAccept(w http.ResponseWriter, r *http.Request) bool {
+	ctx.ReceivedAt = time.Now().UTC()
+
 	defer func() {
 		if err, ok := recover().(error); ok {
 			ctx.doError("Accept", ErrPanic, err)
@@ -329,15 +341,32 @@ func (ctx *Context) doMitm() (w http.ResponseWriter, r *http.Request) {
 
 func (ctx *Context) doRequest(w http.ResponseWriter, r *http.Request) (bool, error) {
 	if !r.URL.IsAbs() {
-		if r.Body != nil {
-			defer r.Body.Close()
+		if ctx.DefaultUpstreamURL != nil {
+			upstreamURL := *ctx.DefaultUpstreamURL
+			upstreamURL.Path += r.URL.Path
+			upstreamURL.RawQuery = r.URL.RawQuery
+			r.URL = &upstreamURL
+		} else {
+			// attempt to reconstruct upstream URL based on host header, note that this makes it possible to get into a request loop
+			scheme := "http"
+			if r.TLS != nil {
+				scheme += "s"
+			}
+			newURL, err := url.Parse(fmt.Sprintf("%s://%s%s", scheme, r.Host, r.URL.Path))
+			if err != nil {
+				if r.Body != nil {
+					defer r.Body.Close()
+				}
+				err := ServeInMemory(w, 500, nil, []byte("This is a proxy server. Does not respond to non-proxy requests."))
+				if err != nil && !isConnectionClosed(err) {
+					ctx.doError("Request", ErrResponseWrite, err)
+				}
+				return true, err
+			}
+			r.URL = newURL
 		}
-		err := ServeInMemory(w, 500, nil, []byte("This is a proxy server. Does not respond to non-proxy requests."))
-		if err != nil && !isConnectionClosed(err) {
-			ctx.doError("Request", ErrResponseWrite, err)
-		}
-		return true, err
 	}
+	log.Print("Proxying request to:", r.URL.String())
 	r.RequestURI = r.URL.String()
 	if ctx.Prx.OnRequest == nil {
 		return false, nil
