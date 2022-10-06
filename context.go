@@ -7,7 +7,6 @@ import (
 	"encoding/base64"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -363,7 +362,7 @@ func (ctx *Context) doRequest(w http.ResponseWriter, r *http.Request) (bool, err
 			r.URL = newURL
 		}
 	}
-	log.Print("Proxying request to:", r.URL.String())
+
 	r.RequestURI = r.URL.String()
 	if ctx.Prx.OnRequest == nil {
 		return false, nil
