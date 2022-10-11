@@ -341,6 +341,7 @@ func (ctx *Context) doRequest(w http.ResponseWriter, r *http.Request) (bool, err
 			upstreamURL := *ctx.Prx.DefaultUpstreamURL
 			upstreamURL.Path += r.URL.Path
 			upstreamURL.RawQuery = r.URL.RawQuery
+			r.Host = upstreamURL.Hostname() // override host header
 			r.URL = &upstreamURL
 		} else {
 			// attempt to reconstruct upstream URL based on host header, note that this makes it possible to get into a request loop
